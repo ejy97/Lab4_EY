@@ -25,14 +25,7 @@ met <- data.table::fread("met_all.gz")
 
 ```{r}
 #Remove temperatures less than -17C
-met <- met[temp >= -17]
-
-#Make sure no missing data in key variables coded as 9999
-met[, temp := ifelse(temp >= 9999, NA, temp)]
-met[, rh := ifelse(rh >= 9999, NA, rh)]
-met[, wind.sp := ifelse(wind.sp >= 9999, NA, wind.sp)]
-met[, vis.dist := ifelse(vis.dist >= 9999, NA, vis.dist)]
-met[, dew.point := ifelse(dew.point >= 9999, NA, dew.point)]
+met <- met[temp >= -17] [elev == 9999.0, elev := NA]
 
 #Generate a date variable
 met[, date := as.Date(paste(year, month, day, sep = "-"))]
@@ -54,7 +47,8 @@ met_avg <- met[, .(
 #Create Region Variables
 met_avg[, region := ifelse(lon < -98 & lat > 39.71, 'NW',
                     ifelse(lon < -98 & lat <= 39.71, 'SW',
-                    ifelse(lon >= -98 & lat > 39.71, 'NE', 'SE')))]
+                    ifelse(lon >= -98 & lat > 39.71, 'NE', 
+                            'SE')))]
 
 #Create Categorical variables
 met_avg[, elev_cat := ifelse(elev > 252, "high", "low")]
@@ -67,20 +61,16 @@ met_avg[, elev_cat := ifelse(elev > 252, "high", "low")]
 install.packages("ggplot2")
 library(ggplot2)
 
-ggplot(met_avg, aes(x = factor(1), y = mean_wind_sp, fill = region)) +
+met_avg[!is.na(region) & !is.na(mean_wind_sp) & !is.na(mean_dew_point)] |> 
+  ggplot(aes(x = region, y = mean_wind_sp, fill = region))+
   geom_violin() +
-  facet_wrap(~region) +
+  facet_wrap(~ region, nrow = 1) +
   labs(title = "Violin Plot of Wind Speed by Region") +
-  theme_minimal()
+  labs(x = "Region", y = "Wind Speed")
 
-ggplot(met_avg, aes(x = factor(1), y = mean_dew_point, fill = region)) +
-  geom_violin() +
-  facet_wrap(~region) +
-  labs(title = "Violin Plot of Dew Point by Region") +
-  theme_minimal()
 ```
 
-The dew point has a wider range in the West than the east. The wind speeds are also higher in the west than the east
+It was difficult for me to interpret this data because the graph would not generate.
 
 #Use geom_jitter with stat_smooth
 
@@ -95,15 +85,20 @@ ggplot(met_avg, aes(x = mean_dew_point, y = mean_wind_sp, color = region)) +
   theme_minimal()
 ```
 
+It was difficult for me to interpret this data because the graph was blank
+
 #Bar plot of weather stations
 
 ```{r}
+library(ggplot2)
 ggplot(met_avg, aes(x = elev_cat, fill = region)) +
   geom_bar(position = "dodge") +
   scale_fill_brewer(palette = "Set3") +
   labs(title = "Weather Stations by Elevation Category", x = "Elevation Category", y = "Count") +
   theme_minimal()
 ```
+
+It was difficult for me to interpret this data because the graph was blank
 
 #Statistical Summary
 
@@ -120,6 +115,8 @@ ggplot(met_avg, aes(x = region, y = mean_wind_sp, fill = region)) +
   labs(title = "Mean Wind Speed by Region with Error Bars") +
   theme_minimal()
 ```
+
+It was difficult for me to interpret this data because the graph was blank
 
 #Map showing spatial trend
 
