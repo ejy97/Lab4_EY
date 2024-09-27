@@ -146,3 +146,5 @@ p <- ggplot(met_avg, aes(x = lon, y = lat, color = mean_wind_sp, size = mean_rh)
 
 animate(p)
 ```
+
+It was difficult for me to interpret this data because the graph was blank
