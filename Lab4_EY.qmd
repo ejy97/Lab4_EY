@@ -1,0 +1,151 @@
+---
+title: "Lab 4"
+author: "Erin Yu"
+format: pdf
+editor: visual
+---
+
+# Lab 4
+
+#Read in the Data
+
+```{r}
+if (!file.exists("met_all.gz")) {
+  download.file(
+    url = "https://raw.githubusercontent.com/USCbiostats/data-science-data/master/02_met/met_all.gz",
+    destfile = "met_all.gz",
+    method   = "libcurl",
+    timeout  = 60
+  )
+}
+met <- data.table::fread("met_all.gz")
+```
+
+#Prepare the Data
+
+```{r}
+#Remove temperatures less than -17C
+met <- met[temp >= -17]
+
+#Make sure no missing data in key variables coded as 9999
+met[, temp := ifelse(temp >= 9999, NA, temp)]
+met[, rh := ifelse(rh >= 9999, NA, rh)]
+met[, wind.sp := ifelse(wind.sp >= 9999, NA, wind.sp)]
+met[, vis.dist := ifelse(vis.dist >= 9999, NA, vis.dist)]
+met[, dew.point := ifelse(dew.point >= 9999, NA, dew.point)]
+
+#Generate a date variable
+met[, date := as.Date(paste(year, month, day, sep = "-"))]
+
+met <- met[data.table::week(date) == 1]
+
+#Compute means by station
+met_avg <- met[, .(
+  mean_temp = mean(temp, na.rm = TRUE),
+  mean_rh = mean(rh, na.rm = TRUE),
+  mean_wind_sp = mean(wind.sp, na.rm = TRUE),
+  mean_vis_dist = mean(vis.dist, na.rm = TRUE),
+  mean_dew_point = mean(dew.point, na.rm = TRUE),
+  lat = mean(lat, na.rm = TRUE),
+  lon = mean(lon, na.rm = TRUE),
+  elev = mean(elev, na.rm = TRUE)
+), by = USAFID]
+
+#Create Region Variables
+met_avg[, region := ifelse(lon < -98 & lat > 39.71, 'NW',
+                    ifelse(lon < -98 & lat <= 39.71, 'SW',
+                    ifelse(lon >= -98 & lat > 39.71, 'NE', 'SE')))]
+
+#Create Categorical variables
+met_avg[, elev_cat := ifelse(elev > 252, "high", "low")]
+
+```
+
+#Use geom_violin
+
+```{r}
+install.packages("ggplot2")
+library(ggplot2)
+
+ggplot(met_avg, aes(x = factor(1), y = mean_wind_sp, fill = region)) +
+  geom_violin() +
+  facet_wrap(~region) +
+  labs(title = "Violin Plot of Wind Speed by Region") +
+  theme_minimal()
+
+ggplot(met_avg, aes(x = factor(1), y = mean_dew_point, fill = region)) +
+  geom_violin() +
+  facet_wrap(~region) +
+  labs(title = "Violin Plot of Dew Point by Region") +
+  theme_minimal()
+```
+
+The dew point has a wider range in the West than the east. The wind speeds are also higher in the west than the east
+
+#Use geom_jitter with stat_smooth
+
+```{r}
+install.packages("ggplot2")
+library(ggplot2)
+
+ggplot(met_avg, aes(x = mean_dew_point, y = mean_wind_sp, color = region)) +
+  geom_jitter() +
+  stat_smooth(method = "lm", se = FALSE) +
+  labs(title = "Association Between Dew Point and Wind Speed by Region") +
+  theme_minimal()
+```
+
+#Bar plot of weather stations
+
+```{r}
+ggplot(met_avg, aes(x = elev_cat, fill = region)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Set3") +
+  labs(title = "Weather Stations by Elevation Category", x = "Elevation Category", y = "Count") +
+  theme_minimal()
+```
+
+#Statistical Summary
+
+```{r}
+ggplot(met_avg, aes(x = region, y = mean_dew_point, fill = region)) +
+  stat_summary(fun.data = "mean_sdl", geom = "bar", color = "black") +
+  stat_summary(fun.data = "mean_sdl", geom = "errorbar", width = 0.2) +
+  labs(title = "Mean Dew Point by Region with Error Bars") +
+  theme_minimal()
+
+ggplot(met_avg, aes(x = region, y = mean_wind_sp, fill = region)) +
+  stat_summary(fun.data = "mean_sdl", geom = "bar", color = "black") +
+  stat_summary(fun.data = "mean_sdl", geom = "errorbar", width = 0.2) +
+  labs(title = "Mean Wind Speed by Region with Error Bars") +
+  theme_minimal()
+```
+
+#Map showing spatial trend
+
+```{r}
+pal <- colorNumeric(palette = "Blues", domain = met_avg$mean_rh)
+
+leaflet(met_avg) %>%
+  addTiles() %>%
+  addCircles(lng = ~lon, lat = ~lat, color = ~pal(mean_rh), radius = 50000) %>%
+  addLegend("bottomright", pal = pal, values = ~mean_rh, title = "Relative Humidity") %>%
+  addMarkers(lng = ~lon[rank(-mean_rh) <= 10], lat = ~lat[rank(-mean_rh) <= 10], 
+             popup = ~paste("RH: ", round(mean_rh, 2)))
+```
+
+#Use ggplot extension
+
+```{r}
+install.packages("gganimate")
+library(gganimate)
+
+p <- ggplot(met_avg, aes(x = lon, y = lat, color = mean_wind_sp, size = mean_rh)) +
+  geom_point() +
+  scale_color_viridis_c() +
+  theme_minimal() +
+  labs(title = 'Wind Speed and Humidity: {frame_time}', x = 'Longitude', y = 'Latitude') +
+  transition_time(year)
+
+animate(p)
+```
